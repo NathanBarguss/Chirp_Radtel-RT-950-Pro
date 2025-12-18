@@ -3798,6 +3798,7 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
     def _apply_tones(self, mem, channel: ChannelRecord) -> None:
         tx = channel.tx_tone
         rx = channel.rx_tone
+
         # CHIRP's CSV exporter validates DtcsCode/RxDtcsCode even when
         # tmode is not DTCS. Use a valid default (e.g. 023) instead of 000
         # to avoid exporter errors.
@@ -3818,31 +3819,47 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             mem.rtone = tone
             mem.ctone = tone
             return
+        if tx.mode is ToneMode.CTCSS and rx.mode is ToneMode.CTCSS and rx.ctcss_hz == tx.ctcss_hz:
+            mem.tmode = "TSQL"
+            tone = tx.ctcss_hz or rx.ctcss_hz or 0.0
+            mem.rtone = tone
+            mem.ctone = tone
+            return            
         if tx.mode is ToneMode.CTCSS and rx.mode is ToneMode.CTCSS and rx.ctcss_hz != tx.ctcss_hz:
-            mem.tmode = "Cross"
-            mem.cross_mode = "Tone->Tone"
-            mem.rtone = rx.ctcss_hz or 0.0
-            mem.ctone = tx.ctcss_hz or 0.0
-            return
+            # check for corner case with pasted memories
+            # assume pasted memories with tx.ctcss_hz frequency of
+            # 88.5 are TSQL
+            if tx.ctcss_hz == 88.5:
+                mem.tmode = "TSQL"
+                tone = rx.ctcss_hz or 0.0
+                mem.rtone = tone
+                mem.ctone = tone
+                return
+            else:               
+                mem.tmode = "Cross"
+                mem.cross_mode = "Tone->Tone"
+                mem.rtone = tx.ctcss_hz or 0.0
+                mem.ctone = rx.ctcss_hz or 0.0
+                return
         if tx.mode is ToneMode.DCS and tx.dcs_code is not None:
             tx_pol = (tx.dcs_polarity or "N").upper()
             if rx.mode is ToneMode.CTCSS:
                 mem.tmode = "Cross"
                 mem.cross_mode = "DTCS->Tone"
-                mem.dtcs = tx.dcs_code
+                mem.dtcs = tx.dcs_code or 0
                 tone = tx.ctcss_hz or rx.ctcss_hz or 0.0
                 mem.rtone = tone
                 mem.ctone = tone
                 rx_pol = (rx.dcs_polarity or "N").upper()
             elif rx.mode is ToneMode.DCS and rx.dcs_code is not None:
                 mem.tmode = "DTCS"
-                mem.dtcs = tx.dcs_code
-                mem.rx_dtcs = rx.dcs_code
+                mem.dtcs = tx.dcs_code or 0
+                mem.rx_dtcs = rx.dcs_code or 0
                 rx_pol = (rx.dcs_polarity or "N").upper()
             else:
                 mem.tmode = "DTCS"
-                mem.dtcs = tx.dcs_code
-                mem.rx_dtcs = tx.dcs_code
+                mem.dtcs = tx.dcs_code or 0
+                mem.rx_dtcs = tx.dcs_code or 0
                 rx_pol = "N"
             mem.dtcs_polarity = tx_pol + rx_pol
             return
@@ -3850,15 +3867,15 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             if tx.mode is ToneMode.CTCSS:
                 mem.tmode = "Cross"
                 mem.cross_mode = "Tone->DTCS"
-                mem.dtcs = rx.dcs_code
+                mem.dtcs = rx.dcs_code or 0
+                #mem.rx_dtcs = tx.dcs_code or 0
                 tone = tx.ctcss_hz or rx.ctcss_hz or 0.0
                 mem.rtone = tone
                 mem.ctone = tone
-                mem.rx_dtcs = rx.dcs_code
             else:
                 mem.tmode = "DTCS"
-                mem.dtcs = rx.dcs_code
-                mem.rx_dtcs = rx.dcs_code
+                mem.dtcs = rx.dcs_code or 0
+                mem.rx_dtcs = rx.dcs_code or 0
             mem.dtcs_polarity = "N" + (rx.dcs_polarity or "N").upper()
             return
         mem.tmode = ""
