@@ -310,7 +310,11 @@ class ToneSetting:
     def dcs(cls, code: int, polarity: str) -> "ToneSetting":
         """Build a DCS tone definition with the supplied code and polarity."""
 
-        return cls(ToneMode.DCS, dcs_code=code, dcs_polarity=polarity.upper())
+        polarity = polarity.upper()
+        # CHIRP spells inverted DCS polarity "R"; the radio's code table uses "I".
+        if polarity == "R":
+            polarity = "I"
+        return cls(ToneMode.DCS, dcs_code=code, dcs_polarity=polarity)
 
     def to_display(self) -> str:
         """Return a human-readable representation of the tone setting."""

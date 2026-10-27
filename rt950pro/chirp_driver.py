@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, Iterable, Optional, Tuple
 
-from .channel import Bandwidth, ChannelRecord, Modulation, PowerLevel, ToneMode
+from .channel import _DCS_CODES, Bandwidth, ChannelRecord, Modulation, PowerLevel, ToneMode
 from .image import CHANNEL_COUNT, CHANNEL_SECTION_BYTES, CHANNEL_SIZE, RadioImage
 from .settings_api import (
     SettingsError,
@@ -285,6 +285,11 @@ except ImportError:  # pragma: no cover - fallback for local development
         RadioFeatures = _RadioFeatures
         CloneModeRadio = _CloneModeRadio
         PowerLevel = _PowerLevel
+        # get_features() and _apply_tones() read these from chirp_common; the
+        # fallback must provide them so the driver also works without CHIRP
+        # installed (tests, CLI tooling).
+        DTCS_CODES = tuple(sorted({int(token[1:4]) for token in _DCS_CODES}))
+        CHARSET_ASCII = "".join(chr(code) for code in range(32, 127))
 
         @staticmethod
         def format_freq(hz):
@@ -1021,6 +1026,12 @@ def _build_clone_payload(image: RadioImage) -> bytes:
         )
     return bytes(payload)
 
+def _pol_to_chirp(polarity: Optional[str]) -> str:
+    """Map the radio's inverted-DCS marker ("I") to CHIRP's spelling ("R")."""
+
+    pol = (polarity or "N").upper()
+    return "R" if pol == "I" else pol
+
 @dataclass
 class _ToneInfo:
     mode: str = ""
@@ -1157,7 +1168,11 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             raw = transport.read_clone()
         except Exception as exc:
             raise errors.RadioError(f'Clone read failed: {exc}') from exc
-        self._image = RadioImage.from_bytes(raw)
+        LOG.info("Radio model string: %r", transport.model)
+        try:
+            self._image = RadioImage.from_bytes(raw)
+        except ValueError as exc:
+            raise errors.RadioError(f'Downloaded image could not be parsed: {exc}') from exc
         self._mmap = memmap.MemoryMapBytes(raw)
         self._metadata = {}
         self._memory_cache.clear()
@@ -1167,7 +1182,10 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             raise errors.RadioError("Serial pipe not initialised")
         if self._image is None:
             raise errors.RadioError("No image loaded")
-        payload = _build_clone_payload(self._image)
+        try:
+            payload = _build_clone_payload(self._image)
+        except ValueError as exc:
+            raise errors.RadioError(f'Image could not be encoded for upload: {exc}') from exc
         transport = CloneSerialTransport(self.pipe, logger=LOG)
         status = None
         try:
@@ -1346,12 +1364,12 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             mem.ctone = tone
             return
         if tx.mode is ToneMode.DCS and tx.dcs_code is not None:
-            tx_pol = (tx.dcs_polarity or "N").upper()
+            tx_pol = _pol_to_chirp(tx.dcs_polarity)
             if rx.mode is ToneMode.DCS and rx.dcs_code is not None:
                 mem.tmode = "DTCS"
                 mem.dtcs = tx.dcs_code
                 mem.rx_dtcs = rx.dcs_code
-                rx_pol = (rx.dcs_polarity or "N").upper()
+                rx_pol = _pol_to_chirp(rx.dcs_polarity)
             else:
                 mem.tmode = "DTCS"
                 mem.dtcs = tx.dcs_code
@@ -1363,7 +1381,7 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             mem.tmode = "DTCS"
             mem.dtcs = rx.dcs_code
             mem.rx_dtcs = rx.dcs_code
-            mem.dtcs_polarity = "N" + (rx.dcs_polarity or "N").upper()
+            mem.dtcs_polarity = "N" + _pol_to_chirp(rx.dcs_polarity)
             return
         mem.tmode = ""
 
@@ -1421,8 +1439,10 @@ class RT950ProRadio(chirp_common.CloneModeRadio):
             # Low HF: FM only
             channel.rx_modulation = Modulation.FM
             channel.bandwidth = Bandwidth.NARROW if mode == "NFM" else Bandwidth.WIDE
+            channel.tx_enabled = True  # undo the airband TX-disable on retune
         else:
             # Default behavior for VHF/UHF
+            channel.tx_enabled = True  # undo the airband TX-disable on retune
             if mode == "AM":
                 channel.rx_modulation = Modulation.AM
                 channel.bandwidth = Bandwidth.WIDE

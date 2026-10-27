@@ -130,7 +130,15 @@ class RadioImage:
             try:
                 record = ChannelRecord.from_bytes(chunk, logger=logger)
             except ValueError as exc:
-                raise ValueError(f"Failed to decode channel {index}: {exc}") from exc
+                # One unreadable slot must not make the whole radio unreadable.
+                # Present it as empty but keep the original bytes so a later
+                # upload leaves the slot untouched unless the user edits it.
+                logger.warning(
+                    "Channel %d could not be decoded (%s); showing as empty. Raw: %s",
+                    index, exc, bytes(chunk).hex(),
+                )
+                record = ChannelRecord.from_bytes(b"\xFF" * CHANNEL_SIZE, logger=logger)
+                record._raw_bytes = bytes(chunk)
             channels.append(record)
 
         offset = CHANNEL_SECTION_BYTES

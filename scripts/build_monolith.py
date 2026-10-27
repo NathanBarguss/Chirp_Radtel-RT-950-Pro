@@ -152,7 +152,9 @@ def _transform_image(text: str) -> str:
 
 
 def _transform_transport(text: str) -> str:
-    return text
+    # The relative import of get_logger is stripped from the monolith, so the
+    # fallback logger must be rewritten the same way as channel/image.
+    return text.replace("get_logger(\"transport\")", "logging.getLogger(__name__ + \".transport\")")
 
 
 def _transform_driver(text: str) -> str:
@@ -199,11 +201,12 @@ def build_monolith(output_path: Path) -> None:
         "from __future__ import annotations",
         "import logging",
         "import random",
+        "import time",
         "import unicodedata",
         "from dataclasses import dataclass, field",
         "from enum import Enum",
         "from pathlib import Path",
-        "from typing import Dict, Iterable, List, Optional, Sequence, Tuple",
+        "from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple",
         "import serial",
     ]
 
