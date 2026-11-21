@@ -15,7 +15,8 @@ This repository tracks reverse-engineering notes, tooling, and implementation wo
    .\.venv\Scripts\Activate.ps1
    pip install --upgrade pip
    ```
-2. Install dependencies as they are added: `pip install -r requirements.txt`.
+2. Install the harness dependencies with `python -m pip install -r requirements.txt`.
+   To run the tests, also install `pytest` with `python -m pip install pytest`.
 3. Keep tooling Python-only so tests can run without a CHIRP install; CHIRP integration will reference the same modules.
 
 ## Planned Tooling
