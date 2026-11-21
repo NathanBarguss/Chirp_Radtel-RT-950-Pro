@@ -34,13 +34,13 @@ This repository tracks reverse-engineering notes, tooling, and implementation wo
 
 ## Testing
 - Automated: `python -m pytest` — validates byte-stable round trips for `rt950pro_clone.bin` and ensures mutated configuration data survives encode/decode cycles.
-- Manual smoke tests:
+- Manual smoke tests (use your own CPS export files for the last two examples):
   - `python -m rt950pro channel decode --hex <64 hex chars>`
   - `python -m rt950pro image clone-read --port COM5 --output rt950pro_clone.bin`
   - `python -m rt950pro image clone-write --port COM5 --input rt950pro_clone.bin`
   - `python -m rt950pro image summary rt950pro_clone.bin --limit 5`
-  - `python -m rt950pro image dat-summary Reference/950Pro Export/Radio.dat --limit 5 --assembly "C:\Program Files (x86)\RT-950PRO_CPS\BT-RT950PRO_CPS.exe"`
-  - `python -m rt950pro regression dat-csv Reference/950Pro Export/Radio.dat Reference/950Pro Export/channels.csv --assembly "C:\Program Files (x86)\RT-950PRO_CPS\BT-RT950PRO_CPS.exe"`
+  - `python -m rt950pro image dat-summary "Reference/950Pro Export/Radio.dat" --limit 5 --assembly "C:\Program Files (x86)\RT-950PRO_CPS\BT-RT950PRO_CPS.exe"`
+  - `python -m rt950pro regression dat-csv "Reference/950Pro Export/Radio.dat" "Reference/950Pro Export/channels.csv" --assembly "C:\Program Files (x86)\RT-950PRO_CPS\BT-RT950PRO_CPS.exe"`
 
 ## Testing Philosophy
 - Prefer end-to-end binary comparisons over mocks; when mocking is unavoidable, log a warning so the shim can be revisited.
