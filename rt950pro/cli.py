@@ -25,8 +25,10 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import suppress
 import json
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Optional, Sequence
 
 from .channel import ChannelRecord
@@ -237,7 +239,21 @@ def _cmd_image_clone_read(*, port: str, baud: int, timeout: float, write_timeout
         logger.error("Unable to open serial port %s: %s", port, exc)
         return 1
 
-    output.write_bytes(data)
+    temporary_path = None
+    try:
+        destination = output.resolve()
+        with NamedTemporaryFile(dir=destination.parent, prefix=".rt950pro-", delete=False) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(data)
+        temporary_path.replace(destination)
+    except OSError as exc:
+        logger.error("Unable to save clone image %s: %s", output, exc)
+        return 2
+    finally:
+        if temporary_path is not None:
+            with suppress(OSError):
+                temporary_path.unlink(missing_ok=True)
+
     logger.info("Wrote %d bytes to %s", len(data), output)
     return 0
 
